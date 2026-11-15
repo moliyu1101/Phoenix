@@ -1,0 +1,36 @@
+{
+  "name": "PUBLIC WIRING FIXTURE - NOT A CAPABILITY BENCHMARK",
+  "repetitions": 1,
+  "cases": [
+    {
+      "name": "Public wiring case 0",
+      "category": "misc",
+      "description": "Public pipeline smoke test 0; inspect and decode payload.txt. This is not a private capability benchmark.",
+      "files_base64": {
+        "payload.txt": "Wm14aFozdG5aVzVsYzJselgzQjFZbXhwWTE5M2FYSnBibWRmWm1sNGRIVnlaVjh3ZlE9PQ=="
+      },
+      "expected_sha256": "743567d0e73f2e05d0c3aa8f0f6061ed3be6f429a1a834da48addc8ca97c1eec",
+      "split": "heldout"
+    },
+    {
+      "name": "Public wiring case 1",
+      "category": "misc",
+      "description": "Public pipeline smoke test 1; inspect and decode payload.txt. This is not a private capability benchmark.",
+      "files_base64": {
+        "payload.txt": "Wm14aFozdG5aVzVsYzJselgzQjFZbXhwWTE5M2FYSnBibWRmWm1sNGRIVnlaVjh4ZlE9PQ=="
+      },
+      "expected_sha256": "67495fdb5642896d69f4e994cd2be6cde8bd5239fe0a1a7ff2b1eb006e175c5d",
+      "split": "heldout"
+    },
+    {
+      "name": "Public wiring case 2",
+      "category": "misc",
+      "description": "Public pipeline smoke test 2; inspect and decode payload.txt. This is not a private capability benchmark.",
+      "files_base64": {
+        "payload.txt": "Wm14aFozdG5aVzVsYzJselgzQjFZbXhwWTE5M2FYSnBibWRmWm1sNGRIVnlaVjh5ZlE9PQ=="
+      },
+      "expected_sha256": "cbce7b4fc7f14ea21c1af5bc97e4e38de021d9e20a4df66bf3e3612615bfa48c",
+      "split": "heldout"
+    }
+  ]
+}

@@ -1,0 +1,168 @@
+{
+  "knowledge": [
+    {
+      "title": "Web: baseline and differential experiments",
+      "category": "web",
+      "body": "Start from the exact authorized origin. Record one stable baseline response, status, redirect and cookie context. Change one input at a time and compare the relevant semantic output, not only response length. A timeout or server error is not a proof of a vulnerability. Keep request parameters and the corresponding raw response together so a reviewer can repeat the experiment. Do not follow redirects outside the declared scope."
+    },
+    {
+      "title": "Web: source-driven hypothesis tracking",
+      "category": "web",
+      "body": "For provided source code, identify the request parser, normalization order, type conversions, authorization checks, template or query construction and the final data sink. Write a falsifiable hypothesis naming the exact transform and observable effect. Test the smallest case that distinguishes that hypothesis from a normal application response. If a hypothesis fails, record the tested preconditions and avoid a universal claim that the entire class is impossible."
+    },
+    {
+      "title": "Crypto: model before brute force",
+      "category": "crypto",
+      "body": "Separate encoding, arithmetic and cryptographic assumptions. Write the equations and their domains, including whether operations occur over integers, modular rings or finite fields. Record the known variables, unknown variables and bounds. Before spending a large brute-force budget, use those constraints to reject inconsistent interpretations. A solution that only produces printable text is a candidate, not a verified plaintext."
+    },
+    {
+      "title": "Crypto: reproducibility and negative knowledge",
+      "category": "crypto",
+      "body": "Keep the original numerical parameters and an executable validation script. A successful recovery must satisfy the supplied public equations, serialization and checksum requirements. For a failed search, retain the actual bounds, alphabet and algorithm parameters; a failed finite search does not disprove the general approach. Split independent algebraic hypotheses into separate intents rather than duplicating the same search with several agents."
+    },
+    {
+      "title": "Pwn: environment agreement",
+      "category": "pwn",
+      "body": "Treat executable architecture, endianness, loader, linked library version and protocol framing as inputs to the solution. Preserve the bytes of each test payload rather than only a shell rendering. A crash proves a fault but does not by itself prove control over a useful primitive. Record offsets and assumptions with the exact binary fingerprint so they are not accidentally reused against a different build."
+    },
+    {
+      "title": "Pwn: staged verification",
+      "category": "pwn",
+      "body": "Break a complex attempt into small checkpoints: reproduce behavior, establish a primitive, validate the primitive under the supplied runtime, then test a complete solution. Keep failed attempts with their exact preconditions. Network exchanges may produce partial reads; do not assume one read returns a full message. The native sandbox is offline; use scoped TCP exchange tools for the declared challenge service."
+    },
+    {
+      "title": "Reverse: observation and semantics",
+      "category": "reverse",
+      "body": "Strings and decompiler output are leads, not final semantics. Locate the validation path and distinguish reachable code from decoys or dead branches. Translate one transformation at a time, preserving integer widths, signedness, overflow and byte order. Differential tests against the original binary can reveal mistakes that a plausible-looking decompilation hides."
+    },
+    {
+      "title": "Reverse: VM recovery",
+      "category": "reverse",
+      "body": "Document instruction encoding, dispatch rules, register or stack state and memory addressing before attempting a complete devirtualization. Trace a minimal input and build an interpreter for the observed subset. Expand the instruction set only as evidence requires. Store the bytecode fingerprint and test traces with the recovered semantics so knowledge from another VM is not silently treated as interchangeable."
+    },
+    {
+      "title": "Forensics: preserve and reconstruct",
+      "category": "forensics",
+      "body": "Work on copies and preserve the source hash. Record the parser, offsets, filters and transformations used for extraction. When reconstructing fragments, establish the ordering field and detect missing or duplicate fragments before decoding the combined payload. Readable output can be coincidental; checksums, format validation and a challenge verifier provide stronger evidence."
+    },
+    {
+      "title": "Forensics: time and boundaries",
+      "category": "forensics",
+      "body": "Keep original timestamps as well as normalized time. Packet boundaries, TCP stream boundaries and application message boundaries are different; a capture may be incomplete or out of order. Image or media artifacts may contain metadata, appended bytes or embedded formats. Inspect the container structure before trying many unrelated transformations. Avoid interpreting a visualization as proof without a reproducible extraction path."
+    },
+    {
+      "title": "Misc: evidence-led triage",
+      "category": "misc",
+      "body": "Do not select a method solely because the challenge name suggests it. Inventory the exact inputs and visible constraints, identify representations and choose tests that distinguish plausible hypotheses. Start with cheap format and consistency checks. Preserve intermediate artifacts and record the parameter values for each attempted transform so a second worker can reproduce or invalidate the result."
+    },
+    {
+      "title": "Misc: encoding and decoys",
+      "category": "misc",
+      "body": "An encoding may be nested, but repeatedly transforming data until something looks meaningful creates false positives. For each layer, record why the encoding fits the alphabet, length or structure and verify the decoded output. Keep candidate flags separate from accepted answers. A checksum, original validator or platform receipt is stronger than a model claiming that the answer looks right."
+    }
+  ],
+  "skills": [
+    {
+      "key": "web-baseline",
+      "category": "web",
+      "applicability": "Authorized HTTP application or provided web source code",
+      "instructions": [
+        "Map the supplied routes, authentication states and trust boundaries before testing hypotheses.",
+        "Compare a minimal baseline request with one controlled variation; keep requests and responses as evidence.",
+        "Trace data from input through parser, transformation and sink in provided source; do not assume a filter is the vulnerability.",
+        "Distinguish application output, challenge decoys and independently accepted answers."
+      ],
+      "stop_conditions": [
+        "Stop when the independent verifier accepts the answer.",
+        "Stop or revise the hypothesis when its explicit preconditions fail.",
+        "Never exceed the declared target scope or shared run budget."
+      ],
+      "memory_ids": []
+    },
+    {
+      "key": "crypto-baseline",
+      "category": "crypto",
+      "applicability": "Ciphertext, cryptographic source, algebraic parameters or protocol transcripts",
+      "instructions": [
+        "Extract the exact equations, domains, parameter sizes and attacker-visible information.",
+        "Check encoding and serialization before assuming a cryptanalytic weakness.",
+        "Use small reproducible instances to test algebraic hypotheses, then apply them to the given parameters.",
+        "Validate recovered values against every public relation and the actual challenge verifier."
+      ],
+      "stop_conditions": [
+        "Stop when the independent verifier accepts the answer.",
+        "Stop or revise the hypothesis when its explicit preconditions fail.",
+        "Never exceed the declared target scope or shared run budget."
+      ],
+      "memory_ids": []
+    },
+    {
+      "key": "pwn-baseline",
+      "category": "pwn",
+      "applicability": "An authorized native binary exploitation challenge or explicitly supplied TCP service",
+      "instructions": [
+        "Inspect architecture, protections, input protocol and linked runtime before crafting a hypothesis.",
+        "Reproduce the fault locally in the disposable sandbox and record the exact input and relevant state.",
+        "Keep primitive discovery separate from exploit reliability and target-environment assumptions.",
+        "Use only explicitly authorized TCP endpoints; validate the final result through independent evidence."
+      ],
+      "stop_conditions": [
+        "Stop when the independent verifier accepts the answer.",
+        "Stop or revise the hypothesis when its explicit preconditions fail.",
+        "Never exceed the declared target scope or shared run budget."
+      ],
+      "memory_ids": []
+    },
+    {
+      "key": "reverse-baseline",
+      "category": "reverse",
+      "applicability": "A supplied binary, bytecode, firmware image, validator or custom VM",
+      "instructions": [
+        "Identify the executable format, architecture and input/validation entry points.",
+        "Recover a small testable transformation before translating a large function or VM.",
+        "Compare recovered semantics against observed behavior on several inputs.",
+        "Reconstruct a candidate and rerun the original validator where possible."
+      ],
+      "stop_conditions": [
+        "Stop when the independent verifier accepts the answer.",
+        "Stop or revise the hypothesis when its explicit preconditions fail.",
+        "Never exceed the declared target scope or shared run budget."
+      ],
+      "memory_ids": []
+    },
+    {
+      "key": "forensics-baseline",
+      "category": "forensics",
+      "applicability": "Packet captures, filesystem artifacts, archives, images, audio or event logs",
+      "instructions": [
+        "Preserve original files and record signatures before transforming them.",
+        "Build a timeline with explicit timezone and capture or log provenance.",
+        "Extract candidate signals with a reversible documented procedure.",
+        "Validate ordering, checksums, completeness and independent answer acceptance."
+      ],
+      "stop_conditions": [
+        "Stop when the independent verifier accepts the answer.",
+        "Stop or revise the hypothesis when its explicit preconditions fail.",
+        "Never exceed the declared target scope or shared run budget."
+      ],
+      "memory_ids": []
+    },
+    {
+      "key": "misc-baseline",
+      "category": "misc",
+      "applicability": "A mixed-format challenge, unfamiliar puzzle or task without a confirmed category",
+      "instructions": [
+        "Inventory files, magic bytes, metadata and explicit constraints before choosing a technique.",
+        "Form small competing hypotheses and use cheap discriminating tests.",
+        "Record failed transformations with exact parameters, not vague conclusions.",
+        "Check decoys, output format and independent acceptance before declaring success."
+      ],
+      "stop_conditions": [
+        "Stop when the independent verifier accepts the answer.",
+        "Stop or revise the hypothesis when its explicit preconditions fail.",
+        "Never exceed the declared target scope or shared run budget."
+      ],
+      "memory_ids": []
+    }
+  ]
+}

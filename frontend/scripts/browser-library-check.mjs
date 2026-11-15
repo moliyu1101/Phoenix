@@ -1,0 +1,3 @@
+/** Compatibility entry point; the current library acceptance lives in browser-refinement-check. */
+import fs from 'node:fs';import path from 'node:path';import {spawnSync} from 'node:child_process';import {fileURLToPath} from 'node:url';
+const out=path.resolve(process.argv[2]);fs.mkdirSync(out,{recursive:true});const metadata=path.join(out,'library-check-metadata.json');fs.writeFileSync(metadata,'{}\n');const check=path.join(path.dirname(fileURLToPath(import.meta.url)),'browser-refinement-check.mjs');const result=spawnSync(process.execPath,[check,metadata,out,...process.argv.slice(3)],{stdio:'inherit'});process.exit(result.status??1);

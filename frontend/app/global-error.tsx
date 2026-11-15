@@ -1,0 +1,2 @@
+"use client";
+export default function GlobalError({reset}:{reset:()=>void}){return <html lang="zh-CN"><body style={{margin:0,fontFamily:"system-ui,sans-serif",background:"#f6f7f9",color:"#20242c"}}><main style={{maxWidth:520,margin:"18vh auto",padding:32}}><h1>工作台暂时无法加载</h1><p>请重新加载页面，或稍后再试。</p><button onClick={reset} style={{padding:"9px 18px",borderRadius:8,border:"1px solid #d9dee8",background:"white",cursor:"pointer"}}>重新加载</button></main></body></html>;}

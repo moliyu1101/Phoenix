@@ -1,0 +1,42 @@
+{
+  "name": "Phoenix 智能体蜂群工作台",
+  "short_name": "Phoenix",
+  "description": "蜂群解题、证据溯源、知识库、记忆蒸馏与策略进化",
+  "start_url": "/ctf",
+  "id": "/ctf",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f1011",
+  "theme_color": "#0f1011",
+  "lang": "zh-CN",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "开始解题",
+      "url": "/ctf",
+      "description": "新建蜂群解题任务"
+    },
+    {
+      "name": "蜂群编队",
+      "url": "/swarm",
+      "description": "查看与配置工作智能体"
+    }
+  ],
+  "categories": [
+    "productivity",
+    "developer"
+  ],
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "browser"
+  ]
+}

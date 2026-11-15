@@ -1,0 +1,60 @@
+/** Navigate the actual Phoenix pages through Phoenix's persistent global rail. */
+import {chromium,expect} from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+const output=path.resolve(process.argv[2]),base=process.argv[3]||'http://127.0.0.1:3012';
+const access=process.argv[4]?fs.readFileSync(process.argv[4],'utf8'):'';
+const token=access?/^PHOENIX_WEB_TOKEN=(.+)$/m.exec(access)?.[1]?.trim():'phoenix-local-browser-fixture-token-2026';
+if(!token)throw new Error('Workbench access token missing');
+fs.mkdirSync(output,{recursive:true});
+const browser=await chromium.launch({channel:'msedge',headless:true});
+const ctx=await browser.newContext({viewport:{width:1580,height:1000}});
+await ctx.addInitScript(key=>{sessionStorage.setItem('phoenix.workbench.token',key);localStorage.setItem('phoenix.themePreference','light');localStorage.setItem('phoenix.motion','reduce');},token);
+const page=await ctx.newPage(),errors=[],failed=[],checks=[];
+page.on('pageerror',e=>errors.push(e.message));
+page.on('response',r=>{if(r.url().startsWith(base)&&r.status()>=400)failed.push({path:new URL(r.url()).pathname,status:r.status()});});
+const nav=()=>page.getByRole('navigation',{name:'模式选择',exact:true});
+const shot=name=>page.screenshot({path:path.join(output,name)});
+try{
+ await page.goto(base);await expect(page.getByRole('heading',{name:'开始解题',exact:true})).toBeVisible({timeout:20000});
+ await expect(nav()).toBeVisible();await expect(nav().getByRole('link')).toHaveCount(6);
+ await expect(nav().getByRole('link',{name:'解题',exact:true})).toHaveAttribute('aria-current','page');
+ await page.getByRole('button',{name:'展开题目侧栏',exact:true}).click();
+ await expect(page.locator('.px-shell>.rail')).not.toHaveClass(/collapsed/);
+ const rail=await page.locator('.workspace-activity-rail').boundingBox(),topics=await page.locator('.px-shell>.rail').boundingBox();
+ expect(rail.width).toBe(56);expect(topics.x).toBeGreaterThanOrEqual(rail.x+rail.width);
+ await shot('Phoenix-19-mode-selector-expanded.png');
+ await page.getByRole('button',{name:'展开题目侧栏',exact:true}).click();
+ await expect(page.locator('.px-shell>.rail')).toHaveClass(/collapsed/);await expect(nav()).toBeVisible();
+ checks.push('global modes remain visible with the challenge sidebar expanded or collapsed');
+ await nav().getByRole('link',{name:'知识库',exact:true}).hover();await expect(page.getByRole('tooltip')).toContainText('知识库');await page.mouse.move(900,200);
+ checks.push('original Phoenix mode tooltips identify icon controls');
+ for(const [mode,title] of [['比赛平台','比赛平台'],['蜂群编队','蜂群编队'],['知识库','知识库'],['记忆蒸馏','记忆蒸馏'],['策略进化','策略进化'],['解题','开始解题']]){
+  await nav().getByRole('link',{name:mode,exact:true}).click();await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
+  await expect(nav()).toBeVisible();await expect(nav().getByRole('link',{name:mode,exact:true})).toHaveAttribute('aria-current','page');
+ }
+ checks.push('all six modes navigate to native pages with the correct active state');
+ const response=await ctx.request.get(base+'/api/overview',{headers:{Authorization:'Bearer '+token}});expect(response.status()).toBe(200);
+ const overview=await response.json(),run=overview.runs.find(r=>r.mode==='demo'&&r.state==='solved');expect(run).toBeTruthy();
+ await page.goto(`${base}/run/${run.id}`);await expect(page.getByRole('tab',{name:'对话',exact:true})).toBeVisible();
+ await expect(nav().getByRole('link',{name:'解题',exact:true})).toHaveAttribute('aria-current','page');
+ await page.getByRole('tab',{name:'运行时',exact:true}).click();await expect(page.locator('.rt-console')).toBeVisible();
+ await nav().getByRole('link',{name:'知识库',exact:true}).click();await expect(page.getByRole('heading',{name:'知识库',exact:true})).toBeVisible();
+ await shot('Phoenix-20-modes-knowledge.png');await page.goBack();
+ await expect(page.getByRole('tab',{name:'运行时',exact:true})).toHaveAttribute('aria-selected','true');await expect(nav()).toBeVisible();
+ checks.push('native run views keep mode navigation and restore the runtime on browser back');
+ await page.goto(base);await expect(page.getByRole('heading',{name:'开始解题',exact:true})).toBeVisible();
+ const aside=page.getByRole('complementary',{name:'工作台导航',exact:true});
+ const originalTheme=await page.locator('html').getAttribute('data-theme');await aside.getByRole('button',{name:/^切换到.*模式$/}).click();await expect(page.locator('html')).toHaveAttribute('data-theme',originalTheme==='dark'?'light':'dark');
+ await page.getByRole('button',{name:'切换明暗主题',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('data-theme',originalTheme);
+ await expect(aside.getByRole('button',{name:/^切换到.*模式$/})).toBeVisible();
+ checks.push('mode rail theme control follows changes from the workbench header');
+ await page.setViewportSize({width:390,height:844});await expect(nav()).toBeVisible();expect((await page.locator('.workspace-activity-rail').boundingBox()).width).toBe(48);
+ await nav().getByRole('link',{name:'知识库',exact:true}).click();await expect(page.getByRole('heading',{name:'知识库',exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await shot('Phoenix-21-mobile-mode-selector.png');
+ await nav().getByRole('link',{name:'解题',exact:true}).click();await expect(page.getByLabel('描述一道题')).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ checks.push('mobile mode navigation stays reachable without horizontal page overflow');
+ expect(errors).toEqual([]);expect(failed).toEqual([]);
+ fs.writeFileSync(path.join(output,'mode-browser-results.json'),JSON.stringify({checks,errors,failed,base},null,2));console.log(JSON.stringify({passed:checks.length,errors,failed},null,2));
+}finally{await browser.close();}

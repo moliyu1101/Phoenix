@@ -1,0 +1,34 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import {fileURLToPath} from 'node:url';
+import {createRequire} from 'node:module';
+import assert from 'node:assert/strict';
+const require=createRequire(import.meta.url),ts=require('typescript');
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const temp=fs.mkdtempSync(path.join(os.tmpdir(),'phoenix-trace-'));
+try{
+ const program=ts.createProgram([path.join(root,'lib/phoenixTrace.ts')],{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,strict:true,skipLibCheck:true,outDir:temp,noEmitOnError:true,types:[]});
+ const errors=ts.getPreEmitDiagnostics(program);assert.equal(errors.length,0,ts.formatDiagnosticsWithColorAndContext(errors,{getCurrentDirectory:()=>root,getCanonicalFileName:n=>n,getNewLine:()=> '\n'}));
+ assert.equal(program.emit().emitSkipped,false);
+ const {phoenixTrace}=require(path.join(temp,'lib/phoenixTrace.js'));
+ const {snapshotAt}=require(path.join(temp,'components/activity-timeline/traceModel.js'));
+ const run={id:'native',created:100,updated:105,state:'exhausted'};
+ const tasks=[{id:'t',key:'decode',worker_id:'solver',started:101,ended:104,state:'done',summary:'Grounded result',goal:'Read original bytes'}];
+ const workers=[{id:'solver',name:'Solver',roles:['solver']},{id:'idle',name:'Unused',roles:['solver']}];
+ const calls=[{id:'m',role:'solver',worker_id:'solver',task_id:'t',created:101.1,ended:102,status:'settled',input_tokens:20,output_tokens:10,cost_usd:null}];
+ const events=[{seq:3,created:103,task_id:'t',kind:'tool.completed',payload:{call_id:'b',tool:'decode',ok:false}}, {seq:1,created:101.5,task_id:'t',kind:'tool.started',payload:{call_id:'a',tool:'file_read'}}, {seq:2,created:102.5,task_id:'t',kind:'tool.started',payload:{call_id:'b',tool:'decode'}}];
+ let count=0;const eq=(a,b)=>{assert.deepEqual(a,b);count++;};
+ const {scenario,origin}=phoenixTrace({run,tasks,model_calls:calls},{workers,tasks},{title:'Fixture',description:'Native prompt'},events);
+ eq(origin,100000);eq(scenario.spans.filter(s=>s.kind==='worker').length,1);eq(scenario.spans.find(s=>s.id==='worker:solver').start,1000);
+ eq(scenario.spans.find(s=>s.id==='worker:solver').end,4000);eq(scenario.spans.find(s=>s.id==='model:m').tokensIn,20);
+ eq(scenario.spans.find(s=>s.id==='model:m').cost,undefined);eq(scenario.spans.find(s=>s.id==='tool:1').unknown,true);
+ eq(scenario.spans.find(s=>s.id==='tool:1').point,true);eq(scenario.spans.find(s=>s.id==='tool:1').end,1500);
+ eq(scenario.spans.find(s=>s.id==='tool:2').start,2500);eq(scenario.spans.find(s=>s.id==='tool:2').end,3000);eq(scenario.spans.find(s=>s.id==='tool:2').failed,true);
+ eq(scenario.events.map(e=>e.ts),[0,1500,2500,3000]);eq(snapshotAt(scenario,scenario.duration).stats.workers,1);
+ const active=phoenixTrace({run:{...run,state:'running'},tasks,model_calls:[]},{workers:[],tasks:[]},null,[]);
+ eq(active.scenario.spans[0].end,undefined);eq(active.scenario.spans.filter(s=>s.kind==='llm').length,0);
+ const failed=phoenixTrace({run:{...run,state:'failed',reason:'preflight failure'},tasks:[]},null,null,[]);
+ eq(failed.scenario.spans[0].failed,true);eq(failed.scenario.spans[0].error,'preflight failure');
+ console.log(JSON.stringify({native_trace_typecheck:'passed',assertions:count}));
+}finally{fs.rmSync(temp,{recursive:true,force:true});}

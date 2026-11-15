@@ -1,0 +1,67 @@
+# Copy to config.yaml. No model request is made by starting the workbench.
+data_dir: data
+host: 127.0.0.1
+port: 18750
+token_env: PHOENIX_WEB_TOKEN
+profiles:
+  default:
+    protocol: chat
+    base_url: https://api.openai.com/v1
+    model: ""  # Required for live runs; also configurable with PHOENIX_MODEL.
+    api_key_env: PHOENIX_API_KEY
+    context_tokens: 32768
+    output_tokens: 4096
+    timeout_seconds: 120
+    chat_token_parameter: max_completion_tokens
+    # Fill in your provider's actual prices before using a USD ceiling.
+    input_usd_per_million: null
+    output_usd_per_million: null
+  reasoning:
+    protocol: chat
+    base_url: https://provider-a.example/v1
+    model: ""
+    api_key_env: PHOENIX_REASONING_KEY
+    context_tokens: 32768
+    output_tokens: 4096
+  alternate:
+    protocol: anthropic
+    base_url: https://provider-b.example
+    model: ""
+    api_key_env: PHOENIX_ALTERNATE_KEY
+    context_tokens: 32768
+    output_tokens: 4096
+roles:
+  planner: default
+  analyst: default
+  solver: default
+  reviewer: default
+  distiller: default
+sandbox_image: phoenix-tools:0.1.0
+sandbox_memory: 1024m
+sandbox_cpus: 1.0
+max_output_bytes: 2097152
+# Optional real embeddings; lexical retrieval works without these.
+embedding_base_url: null
+embedding_model: null
+embedding_key_env: PHOENIX_EMBEDDING_KEY
+embedding_input_usd_per_million: null
+allowed_origins: []
+
+# Roster: one active task per worker. concurrency is the run-wide worker cap.
+# profile omitted => follow the role routing above.
+workers:
+  - id: scout
+    name: Recon Analyst
+    roles: [analyst]
+  - id: solver-a
+    name: Solver Alpha
+    roles: [solver]
+    profile: reasoning
+  - id: solver-b
+    name: Solver Beta
+    roles: [solver]
+    profile: alternate
+    instructions: Prefer complementary experiments. Read shared facts before repeating work.
+  - id: reviewer
+    name: Independent Reviewer
+    roles: [reviewer]
