@@ -18,6 +18,11 @@ class Components:
     def __init__(self, settings: Settings, provider=None):
         self.settings = settings
         self.store = Store(settings.data_dir)
+        from .auth import Auth
+        self.auth = Auth(settings)
+        from .effects import Effects
+        self.effects = Effects(self.store)
+        self.effect_handlers: dict = {}
         self.evidence = EvidenceStore(self.store, settings.max_output_bytes)
         self.knowledge = Knowledge(self.store, settings)
         self.memory = Memory(self.store, self.evidence, self.knowledge)
@@ -51,4 +56,6 @@ class Components:
         self.tools.extensions = self.extensions
         from .competition import Competitions
         self.competitions = Competitions(self)
+        from .attention import Attention
+        self.attention = Attention(self)
 

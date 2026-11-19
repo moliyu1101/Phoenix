@@ -122,6 +122,7 @@ function GlobalWorkspacePalette({ overview, open, setOpen }: { overview: Workspa
       );
     } else base.push(
       { id: "usage", label: "全局用量", detail: "对话、任务与比赛 Token 统计", href: "/usage", icon: "rows" },
+      { id: "attention", label: "待人工总览", detail: "只显示需要操作者决策的事项与副作用队列健康", href: "/attention", icon: "radio" },
       { id: "settings-hub", label: "打开设置", detail: "设置中心：Agents、能力、运维与扩展", href: "/settings", icon: "gear" },
       { id: "settings-agents", label: "Agents", detail: "九类引擎的登录、模型和接入", href: "/settings/agents", icon: "plug" },
       { id: "settings-capabilities", label: "能力管理", detail: "Conversation Thread 授权与全局 MCP/Skills，不是 Fact 图白名单", href: "/settings/capabilities", icon: "network" },

@@ -288,3 +288,60 @@ async def test_native_rest_contract(components, scheduler, no_launch):
                                                              'external_competition_id': 'game-1'})).status_code == 409
         assert (await client.delete(f"/api/competitions/{comp['id']}")).json()['removed'] == comp['id']
         assert (await client.get('/api/competitions')).json() == []
+
+
+async def test_record_only_previews_without_launching(components, scheduler, no_launch):
+    cid, _ = await connect(components, [snapshot('7', 'A', 'web')])
+    comp = scheduler.register(cid, '预演赛', policy={'record_only': True, 'max_concurrency': 4})
+    await scheduler.sync(comp['id'])
+    scheduler.scheduler(comp['id'], 'start')
+    result = await scheduler.tick(comp['id'])
+    assert result['recorded'] and not result['admitted'] and not no_launch
+    entry = scheduler.queue(comp['id'])[0]
+    assert entry['state'] == 'pending'
+    assert entry['admission_decision'] == {'action': 'record', 'reason': 'record_only'}
+    admitted = await scheduler.admit(comp['id'], entry['id'])
+    assert admitted['state'] == 'running' and admitted['run_id'] in no_launch
+
+
+async def test_policy_version_changes_with_policy(components, scheduler):
+    cid, _ = await connect(components, [snapshot('7', 'A')])
+    comp = scheduler.register(cid, '版本赛')
+    first = comp['policy_version']
+    updated = scheduler.set_policy(comp['id'], {**comp['policy'], 'max_concurrency': 5})
+    assert len(first) == 16 and updated['policy_version'] != first
+
+
+async def test_uncertain_submit_dead_letters_then_retry_records_unknown(components, scheduler):
+    flag = 'flag{uncertain_native}'
+    cid, adapter = await connect(components, [snapshot('7', 'Decode', 'misc')])
+    comp = scheduler.register(cid, '不确定赛', policy={'auto_submit': True})
+    await scheduler.sync(comp['id'])
+    challenge = await components.platforms.import_challenge(cid, '7', [])
+    SecureFiles(components.store.root / 'inputs' / challenge['id']).write(
+        'payload.txt', base64.b64encode(flag.encode()))
+    components.store.execute('INSERT INTO verifiers VALUES(?,?)', (challenge['id'], digest(flag)))
+    scheduler.scheduler(comp['id'], 'start')
+    await scheduler.tick(comp['id'])
+    entry = scheduler.queue(comp['id'])[0]
+    await asyncio.wait_for(components.runtime.background[entry['run_id']], 30)
+    assert components.store.run(entry['run_id'])['state'] == 'solved'
+
+    async def boom(request):
+        raise RuntimeError('platform POST lost')
+
+    adapter.submit = boom
+    result = await scheduler.tick(comp['id'])
+    assert not result['submitted'] and result['errors']
+    assert not scheduler.queue(comp['id'])[0]['submission_id']
+    effect = components.effects.list(kind='competition.submit')[0]
+    assert effect['state'] == 'dead_letter'
+    assert any(i['kind'] == 'effect' for i in components.attention.overview()['items'])
+
+    components.effects.retry(effect['id'])
+    result = await scheduler.tick(comp['id'])
+    assert result['submitted'] == [entry['id']]
+    settled = scheduler.queue(comp['id'])[0]
+    assert settled['submission_id'] and settled['submission_state'] == 'unknown'
+    assert any(i['kind'] == 'submission' for i in components.attention.overview()['items'])
+    await components.platforms.shutdown()

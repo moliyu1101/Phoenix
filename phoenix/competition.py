@@ -5,7 +5,8 @@ import json
 
 from pydantic import Field, field_validator
 
-from .domain import (BudgetSpec, Category, ChallengeInput, Conflict, RunInput, Strict, dump, now, uid)
+from .domain import (BudgetSpec, Category, ChallengeInput, Conflict, RunInput, Strict, digest, dump, now, uid)
+from .effects import Uncertain
 
 SCHEMA = (
     """CREATE TABLE IF NOT EXISTS competitions(
@@ -57,6 +58,7 @@ class CompetitionPolicy(Strict):
     auto_submit: bool = False
     auto_import: bool = True
     auto_distill: bool = False
+    record_only: bool = False
     flag_prefix: str = Field(default='flag', pattern=r'^[A-Za-z0-9_]{1,32}$')
     targets: list[str] = Field(default_factory=list, max_length=20)
     budget: BudgetSpec = Field(default_factory=BudgetSpec)
@@ -74,6 +76,7 @@ class Competitions:
         self.c, self.store = components, components.store
         for statement in SCHEMA:
             self.store.execute(statement)
+        self.c.effect_handlers['competition.submit'] = self._deliver
 
     def _row(self, competition_id: str) -> dict:
         return self.store.one('SELECT * FROM competitions WHERE id=?', (competition_id,))
@@ -95,6 +98,7 @@ class Competitions:
     def _summary(self, competition: dict, counts: dict) -> dict:
         value = {k: v for k, v in competition.items() if k != 'policy'}
         value['policy'] = json.loads(competition['policy'])
+        value['policy_version'] = digest(dump(value['policy']))[:16]
         value['counts'] = counts.get(competition['id'], {})
         return value
 
@@ -240,7 +244,7 @@ class Competitions:
         competition = self._row(competition_id)
         policy = self._policy(competition)
         result: dict = {'competition_id': competition_id, 'admitted': [], 'settled': [],
-                        'submitted': [], 'errors': []}
+                        'submitted': [], 'recorded': [], 'errors': []}
         bound = self.store.all('SELECT * FROM competition_queue WHERE competition_id=? AND run_id IS NOT NULL '
                                "AND state NOT IN ('pending','skipped') ORDER BY created", (competition_id,))
         for entry in bound:
@@ -259,11 +263,24 @@ class Competitions:
                     if slots <= 0:
                         break
                     try:
-                        if await self._admit(competition, policy, entry) == 'admit':
+                        decision = await self._admit(competition, policy, entry)
+                        if decision == 'admit':
                             slots -= 1
                             result['admitted'].append(entry['id'])
+                        elif decision == 'record':
+                            result['recorded'].append(entry['id'])
                     except Exception as exc:
                         self._record_error(entry, exc, result, failed=True)
+        # Deliver durable submission effects inline so tick stays synchronous; the background
+        # effects loop drains any that survive a restart. Scope to this competition's entries.
+        if policy.auto_submit and bound:
+            drained = await self.c.effects.drain({'competition.submit': self._deliver},
+                                                 kinds=['competition.submit'], keys=[e['id'] for e in bound])
+            for item in drained:
+                if item['state'] == 'completed':
+                    result['submitted'].append(item['key'])
+                elif item['state'] == 'dead_letter':
+                    result['errors'].append({'id': item['key'], 'reason': item.get('error', 'submission failed')})
         self.store.execute('UPDATE competitions SET updated=? WHERE id=?', (now(), competition_id))
         return result
 
@@ -273,6 +290,9 @@ class Competitions:
         if not force and policy.categories and entry['category'] not in policy.categories:
             self._decision(entry, 'hold', 'category_filtered')
             return 'hold'
+        if not force and policy.record_only:
+            self._decision(entry, 'record', 'record_only')
+            return 'record'
         link = self.store.all('SELECT challenge_id FROM platform_links WHERE connection_id=? AND challenge_key=?',
                               (connection_id, entry['challenge_key']))
         if link:
@@ -324,14 +344,30 @@ class Competitions:
                                    'ORDER BY created LIMIT 1', (run['id'],))
         if not candidate:
             return
-        receipt = await self.c.platforms.submit(competition['connection_id'], candidate[0]['id'], True)
+        self.c.effects.enqueue('competition.submit', entry['id'],
+                               {'competition_id': competition['id'], 'entry_id': entry['id'],
+                                'connection_id': competition['connection_id'], 'candidate_id': candidate[0]['id'],
+                                'run_id': run['id']}, destination='platform:' + competition['connection_id'])
+
+    async def _deliver(self, payload: dict) -> dict:
+        entry = self._entry(payload['competition_id'], payload['entry_id'])
+        if entry['submission_id']:
+            return {'competition_id': payload['competition_id'], 'entry_id': entry['id'],
+                    'submission_id': entry['submission_id'], 'state': entry['submission_state']}
+        try:
+            receipt = await self.c.platforms.submit(payload['connection_id'], payload['candidate_id'], True)
+        except Exception as exc:
+            # platforms.submit already marked the receipt unknown and will not re-POST; fail closed
+            # and dead-letter so a person reconciles the platform state before any retry.
+            raise Uncertain(f'{type(exc).__name__}: {str(exc)[:400]}') from exc
         self.store.execute('UPDATE competition_queue SET submission_id=?,submission_state=?,updated=? WHERE id=?',
                            (receipt['id'], receipt['state'], now(), entry['id']))
-        self.store.event(run['id'], 'competition.submitted',
-                         {'competition_id': competition['id'], 'queue_id': entry['id'],
-                          'candidate_id': candidate[0]['id'], 'submission_id': receipt['id'],
+        self.store.event(payload['run_id'], 'competition.submitted',
+                         {'competition_id': payload['competition_id'], 'queue_id': entry['id'],
+                          'candidate_id': payload['candidate_id'], 'submission_id': receipt['id'],
                           'state': receipt['state']})
-        result['submitted'].append(entry['id'])
+        return {'competition_id': payload['competition_id'], 'entry_id': entry['id'],
+                'submission_id': receipt['id'], 'state': receipt['state']}
 
     def _decision(self, entry: dict, action: str, reason: str):
         self.store.execute('UPDATE competition_queue SET admission_decision=?,updated=? WHERE id=?',

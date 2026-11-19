@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Str
 from pydantic import Field
 
 from . import __version__
+from .auth import COOKIE_NAME
 from .config import Settings
 from .demo import create_demo
 from .domain import ChallengeInput, Conflict, NotFound, PhoenixError, RunInput, SkillSpec, Strict, dump
@@ -89,13 +90,17 @@ def create_app(settings: Settings, components: Components | None = None) -> Fast
             lock_file.close()
             raise RuntimeError('Another server owns this data directory; run one control-plane process')
         c.store.recover()
+        c.effects.recover()
         from .competition import competition_loop
+        from .effects import effects_loop
         competition_stop = asyncio.Event()
         competition_task = asyncio.create_task(competition_loop(c, competition_stop))
+        effects_task = asyncio.create_task(effects_loop(c, competition_stop))
         yield
         competition_stop.set()
         competition_task.cancel()
-        await asyncio.gather(competition_task, return_exceptions=True)
+        effects_task.cancel()
+        await asyncio.gather(competition_task, effects_task, return_exceptions=True)
         for task in list(c.runtime.background.values()):
             if not task.done():
                 task.cancel()
@@ -115,10 +120,17 @@ def create_app(settings: Settings, components: Components | None = None) -> Fast
     @app.middleware('http')
     async def access_control(request: Request, call_next):
         if request.url.path.startswith('/api') or request.url.path == '/openapi.json':
-            supplied = request.headers.get('authorization', '')
-            expected = 'Bearer ' + settings.web_token
-            if not settings.web_token or not hmac.compare_digest(supplied, expected):
-                return JSONResponse({'error': 'Authentication required'}, status_code=401)
+            # login/logout are the session entry/exit and carry no credential yet.
+            if request.url.path not in ('/api/auth/login', '/api/auth/logout'):
+                supplied = request.headers.get('authorization', '')
+                expected = 'Bearer ' + settings.web_token
+                bearer_ok = bool(settings.web_token) and hmac.compare_digest(supplied, expected)
+                sid = request.cookies.get(COOKIE_NAME)
+                session = c.auth.session(sid)
+                ticket_ok = c.auth.consume_ticket(request.query_params.get('ticket'))
+                if not (bearer_ok or session or ticket_ok):
+                    return JSONResponse({'error': 'Authentication required'}, status_code=401)
+                request.state.auth_session = sid if session else None
             origin = request.headers.get('origin')
             if origin and origin not in permitted_origins:
                 return JSONResponse({'error': 'Origin is not allowed'}, status_code=403)
@@ -439,6 +451,10 @@ def create_app(settings: Settings, components: Components | None = None) -> Fast
     attach_fusion(app, c)
     from .competition_api import attach_competition
     attach_competition(app, c)
+    from .orchestration_api import attach_orchestration
+    attach_orchestration(app, c)
+    from .auth_api import attach_auth
+    attach_auth(app, c)
     from .extensions_api import attach_extensions
     attach_extensions(app, c)
 
